@@ -495,9 +495,8 @@
     try {
       var parser = new DOMParser();
 
-      // SVG単体かHTMLかを判定
       if (code.match(/^\s*<svg[\s>]/i)) {
-        // SVG単体: 従来通りSVGとしてパース
+        // === SVGモード ===
         var svgDoc = parser.parseFromString(code, 'image/svg+xml');
         var errorNode = svgDoc.querySelector('parsererror');
         if (errorNode) {
@@ -509,11 +508,12 @@
           var svgNode = svgDoc.documentElement;
           document.adoptNode(svgNode);
           previewContainer.appendChild(svgNode);
-          previewStatus.textContent = '正常';
+          previewStatus.textContent = '正常 (SVG)';
           previewStatus.style.color = '#40a02b';
         }
-      } else {
-        // HTML: HTMLとしてパースしてSVG要素を抽出
+
+      } else if (code.match(/^\s*</)) {
+        // === HTMLモード ===
         var htmlDoc = parser.parseFromString(code, 'text/html');
         var svgElements = htmlDoc.querySelectorAll('svg');
 
@@ -528,7 +528,6 @@
             if (!el.getAttribute('xmlns')) {
               el.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
             }
-            // SVG文字列として再パースして安全に挿入
             var serializer = new XMLSerializer();
             var svgStr = serializer.serializeToString(el);
             var svgDoc2 = parser.parseFromString(svgStr, 'image/svg+xml');
@@ -539,13 +538,59 @@
               previewContainer.appendChild(node);
             }
           }
-          previewStatus.textContent = '正常 (SVG: ' + svgElements.length + '個)';
+          previewStatus.textContent = '正常 (HTML, SVG: ' + svgElements.length + '個)';
           previewStatus.style.color = '#40a02b';
         }
+
+      } else {
+        // === JS実行モード ===
+        executeJsPreview(code);
       }
     } catch (e) {
       previewContainer.innerHTML = '<div class="error-msg">' + escapeHtml(e.message) + '</div>';
       previewStatus.textContent = 'エラー';
+      previewStatus.style.color = '#e64553';
+    }
+  }
+
+  function executeJsPreview(code) {
+    try {
+      // コード末尾に return svg; を追加してSVG文字列を取得
+      var wrappedCode = code + '\nreturn typeof svg !== "undefined" ? svg : null;';
+      var fn = new Function(wrappedCode);
+      var svgString = fn();
+
+      if (!svgString || typeof svgString !== 'string') {
+        previewContainer.innerHTML = '<div class="error-msg">JS実行完了しましたが、svg変数が見つかりません。\n\nコード内で var svg = \'...\'; の形式でSVG文字列を構築してください。</div>';
+        previewStatus.textContent = 'svg変数なし';
+        previewStatus.style.color = '#e64553';
+        return;
+      }
+
+      // 得られたSVG文字列をパースして表示
+      var parser = new DOMParser();
+      var svgDoc = parser.parseFromString(svgString, 'image/svg+xml');
+      var errorNode = svgDoc.querySelector('parsererror');
+      if (errorNode) {
+        // SVGパースエラーでもinnerHTMLで表示を試みる
+        previewContainer.innerHTML = svgString;
+        previewStatus.textContent = '正常 (JS実行, パース警告あり)';
+        previewStatus.style.color = '#df8e1d';
+      } else {
+        previewContainer.innerHTML = '';
+        var svgNode = svgDoc.documentElement;
+        document.adoptNode(svgNode);
+        previewContainer.appendChild(svgNode);
+        previewStatus.textContent = '正常 (JS実行)';
+        previewStatus.style.color = '#40a02b';
+      }
+    } catch (e) {
+      var errMsg = e.message || String(e);
+      // 行番号抽出を試みる
+      var lineMatch = errMsg.match(/line (\d+)/i) || errMsg.match(/:(\d+):/);
+      var lineInfo = lineMatch ? ' (行: ' + lineMatch[1] + ')' : '';
+      previewContainer.innerHTML = '<div class="error-msg">JS実行エラー' + lineInfo + '\n\n' + escapeHtml(errMsg) + '</div>';
+      previewStatus.textContent = 'JS実行エラー';
       previewStatus.style.color = '#e64553';
     }
   }
