@@ -232,6 +232,15 @@
     0%, 70% { stroke-opacity: 1; }
     100% { stroke-opacity: 0; }
   }
+
+  /* ===== 座標グリッド ===== */
+  .coord-grid line { stroke: #ccc; stroke-width: 0.5; }
+  .coord-grid line.major { stroke: #aaa; stroke-width: 1; }
+  .coord-grid text { fill: #999; font-size: 9px; font-family: monospace; pointer-events: none; }
+  #btn-grid.active { background: #cba6f7; color: #1e1e2e; border-color: #cba6f7; }
+
+  /* ===== クリックヘルパー（線のヒットエリア拡大） ===== */
+  .click-helper { pointer-events: stroke; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -259,6 +268,7 @@
   <div class="separator"></div>
   <span class="group-label">操作</span>
   <button class="btn" onclick="insertShape('text')" title="テキストラベル">テキスト</button>
+  <button class="btn" id="btn-grid" onclick="toggleGrid()" title="座標グリッド表示/非表示">座標</button>
   <button class="btn" onclick="loadSample()" title="サンプルを読み込み">サンプル</button>
   <button class="btn" onclick="clearEditor()" title="エディタをクリア">クリア</button>
   <button class="btn accent" onclick="copySvg()" title="SVGコードをコピー">コピー</button>
@@ -520,6 +530,7 @@
           var svgNode = svgDoc.documentElement;
           document.adoptNode(svgNode);
           previewContainer.appendChild(svgNode);
+          postProcessSvg();
           previewStatus.textContent = '正常 (SVG)';
           previewStatus.style.color = '#40a02b';
         }
@@ -550,6 +561,7 @@
               previewContainer.appendChild(node);
             }
           }
+          postProcessSvg();
           previewStatus.textContent = '正常 (HTML, SVG: ' + svgElements.length + '個)';
           previewStatus.style.color = '#40a02b';
         }
@@ -611,6 +623,7 @@
 
       // === SVGをプレビューに表示 ===
       previewContainer.innerHTML = svgString;
+      postProcessSvg();
       previewStatus.textContent = '正常 (JS実行)';
       previewStatus.style.color = '#40a02b';
 
@@ -802,16 +815,150 @@
     }, 3000);
   }
 
+  // ===== 座標グリッド =====
+  var gridEnabled = false;
+
+  window.toggleGrid = function() {
+    gridEnabled = !gridEnabled;
+    var btn = document.getElementById('btn-grid');
+    if (gridEnabled) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+    updatePreview();
+  };
+
+  function injectCoordinateGrid(svgEl) {
+    var ns = 'http://www.w3.org/2000/svg';
+    // viewBox解析
+    var vb = svgEl.getAttribute('viewBox');
+    var minX = 0, minY = 0, w = 0, h = 0;
+    if (vb) {
+      var parts = vb.trim().split(/[\s,]+/);
+      minX = parseFloat(parts[0]) || 0;
+      minY = parseFloat(parts[1]) || 0;
+      w = parseFloat(parts[2]) || 0;
+      h = parseFloat(parts[3]) || 0;
+    }
+    if (!w || !h) {
+      w = parseFloat(svgEl.getAttribute('width')) || 0;
+      h = parseFloat(svgEl.getAttribute('height')) || 0;
+    }
+    if (!w || !h) {
+      try { var bb = svgEl.getBBox(); w = bb.width + bb.x; h = bb.height + bb.y; } catch (e) { return; }
+    }
+    if (!w || !h) return;
+
+    // グリッド間隔を自動決定
+    var maxDim = Math.max(w, h);
+    var step = maxDim > 800 ? 100 : maxDim > 300 ? 50 : 25;
+
+    var g = document.createElementNS(ns, 'g');
+    g.setAttribute('class', 'coord-grid');
+
+    // 縦線 + Xラベル
+    var startX = Math.ceil(minX / step) * step;
+    for (var x = startX; x <= minX + w; x += step) {
+      var line = document.createElementNS(ns, 'line');
+      line.setAttribute('x1', x);
+      line.setAttribute('y1', minY);
+      line.setAttribute('x2', x);
+      line.setAttribute('y2', minY + h);
+      if (x % (step * 2) === 0) line.setAttribute('class', 'major');
+      g.appendChild(line);
+
+      var label = document.createElementNS(ns, 'text');
+      label.setAttribute('x', x + 2);
+      label.setAttribute('y', minY + 10);
+      label.textContent = x;
+      g.appendChild(label);
+    }
+
+    // 横線 + Yラベル
+    var startY = Math.ceil(minY / step) * step;
+    for (var y = startY; y <= minY + h; y += step) {
+      var hLine = document.createElementNS(ns, 'line');
+      hLine.setAttribute('x1', minX);
+      hLine.setAttribute('y1', y);
+      hLine.setAttribute('x2', minX + w);
+      hLine.setAttribute('y2', y);
+      if (y % (step * 2) === 0) hLine.setAttribute('class', 'major');
+      g.appendChild(hLine);
+
+      var hLabel = document.createElementNS(ns, 'text');
+      hLabel.setAttribute('x', minX + 2);
+      hLabel.setAttribute('y', y - 2);
+      hLabel.textContent = y;
+      g.appendChild(hLabel);
+    }
+
+    // 最初の子要素として挿入（背景側）
+    if (svgEl.firstChild) {
+      svgEl.insertBefore(g, svgEl.firstChild);
+    } else {
+      svgEl.appendChild(g);
+    }
+  }
+
+  // ===== クリックヘルパー（線のヒットエリア拡大） =====
+  function addClickHelpers(svgEl) {
+    var lines = svgEl.querySelectorAll('line, polyline');
+    for (var i = 0; i < lines.length; i++) {
+      // coord-grid内の線は除外
+      if (lines[i].closest && lines[i].closest('.coord-grid')) continue;
+      var parent = lines[i].parentNode;
+      while (parent && parent !== svgEl) {
+        if (parent.classList && parent.classList.contains('coord-grid')) break;
+        parent = parent.parentNode;
+      }
+      if (parent !== svgEl) continue;
+
+      var clone = lines[i].cloneNode(false);
+      clone.setAttribute('stroke', 'transparent');
+      clone.setAttribute('stroke-width', '12');
+      clone.setAttribute('fill', 'none');
+      clone.removeAttribute('marker-end');
+      clone.removeAttribute('marker-start');
+      clone.setAttribute('class', 'click-helper');
+      lines[i].parentNode.insertBefore(clone, lines[i].nextSibling);
+    }
+  }
+
+  // SVG描画後の共通後処理
+  function postProcessSvg() {
+    var svgs = previewContainer.querySelectorAll('svg');
+    for (var i = 0; i < svgs.length; i++) {
+      addClickHelpers(svgs[i]);
+      if (gridEnabled) injectCoordinateGrid(svgs[i]);
+    }
+  }
+
   // ===== プレビュークリック → コードジャンプ =====
 
   // クリック対象の解析: 意味のあるSVG要素を特定
   function resolveClickTarget(element) {
     var el = element;
+
+    // coord-grid内の要素は無視
+    var check = el;
+    while (check && check !== previewContainer) {
+      if (check.classList && check.classList.contains('coord-grid')) return null;
+      check = check.parentNode;
+    }
+
+    // click-helper → 元の線要素に差し替え
+    if (el.classList && el.classList.contains('click-helper')) {
+      el = el.previousElementSibling || el;
+    }
+
     // 無視する要素
     while (el && el !== previewContainer) {
       var tag = el.tagName ? el.tagName.toLowerCase() : '';
-      if (tag === 'svg' && el.parentNode === previewContainer) return null; // SVGルート背景
+      if (tag === 'svg' && el.parentNode === previewContainer) return null;
       if (tag === 'defs' || tag === 'marker') return null;
+      // tspan → 親textに昇格
+      if (tag === 'tspan') { el = el.parentNode; tag = el.tagName ? el.tagName.toLowerCase() : ''; }
       if (['rect', 'text', 'line', 'polygon', 'polyline', 'path', 'ellipse', 'circle'].indexOf(tag) >= 0) {
         break;
       }
