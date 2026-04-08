@@ -555,38 +555,55 @@
 
   function executeJsPreview(code) {
     try {
-      // コード末尾に return svg; を追加してSVG文字列を取得
-      var wrappedCode = code + '\nreturn typeof svg !== "undefined" ? svg : null;';
+      // === プリアンブル: 不足する関数・オブジェクトを提供 ===
+      var preamble = [
+        // (1) escH (HTMLエスケープ) をコード側で未定義の場合のみ提供
+        'if(typeof escH==="undefined"){function escH(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\\"/g,"\\&quot;");}}',
+        // (2) document.getElementById をモックし innerHTML 代入をキャプチャ
+        'var __capturedSvg=null;',
+        'var document={getElementById:function(){return{get innerHTML(){return __capturedSvg||"";},set innerHTML(v){__capturedSvg=v;}};}}; '
+      ].join('\n');
+
+      // === function宣言を正規表現で検出 ===
+      var funcMatches = code.match(/function\s+(\w+)\s*\(/g) || [];
+      var funcNames = [];
+      for (var fi = 0; fi < funcMatches.length; fi++) {
+        funcNames.push(funcMatches[fi].replace(/function\s+/, '').replace(/\s*\(/, ''));
+      }
+
+      // ヘルパー関数（_で始まる）を除外し、メイン関数だけを呼ぶ
+      var mainFuncs = [];
+      for (var mi = 0; mi < funcNames.length; mi++) {
+        if (funcNames[mi].charAt(0) !== '_' && funcNames[mi] !== 'escH') {
+          mainFuncs.push(funcNames[mi]);
+        }
+      }
+
+      // === ポストアンブル: 関数を順に実行しSVGをキャプチャ ===
+      var calls = '';
+      for (var ci = 0; ci < mainFuncs.length; ci++) {
+        calls += 'try{if(!__capturedSvg&&typeof ' + mainFuncs[ci] + '==="function"){' + mainFuncs[ci] + '();}}catch(__e){}\n';
+      }
+      var postamble = calls + 'return __capturedSvg||(typeof svg!=="undefined"?svg:null);';
+
+      var wrappedCode = preamble + '\n' + code + '\n' + postamble;
       var fn = new Function(wrappedCode);
       var svgString = fn();
 
       if (!svgString || typeof svgString !== 'string') {
-        previewContainer.innerHTML = '<div class="error-msg">JS実行完了しましたが、svg変数が見つかりません。\n\nコード内で var svg = \'...\'; の形式でSVG文字列を構築してください。</div>';
-        previewStatus.textContent = 'svg変数なし';
+        previewContainer.innerHTML = '<div class="error-msg">JS実行完了しましたが、SVG出力が見つかりません。\n\n確認事項:\n・svg変数にSVG文字列が構築されているか\n・document.getElementById(...).innerHTML=svg でDOMに出力しているか\n\n検出した関数: ' + (mainFuncs.length > 0 ? mainFuncs.join(', ') : 'なし') + '</div>';
+        previewStatus.textContent = 'SVG出力なし';
         previewStatus.style.color = '#e64553';
         return;
       }
 
-      // 得られたSVG文字列をパースして表示
-      var parser = new DOMParser();
-      var svgDoc = parser.parseFromString(svgString, 'image/svg+xml');
-      var errorNode = svgDoc.querySelector('parsererror');
-      if (errorNode) {
-        // SVGパースエラーでもinnerHTMLで表示を試みる
-        previewContainer.innerHTML = svgString;
-        previewStatus.textContent = '正常 (JS実行, パース警告あり)';
-        previewStatus.style.color = '#df8e1d';
-      } else {
-        previewContainer.innerHTML = '';
-        var svgNode = svgDoc.documentElement;
-        document.adoptNode(svgNode);
-        previewContainer.appendChild(svgNode);
-        previewStatus.textContent = '正常 (JS実行)';
-        previewStatus.style.color = '#40a02b';
-      }
+      // === SVGをプレビューに表示 ===
+      previewContainer.innerHTML = svgString;
+      previewStatus.textContent = '正常 (JS実行)';
+      previewStatus.style.color = '#40a02b';
+
     } catch (e) {
       var errMsg = e.message || String(e);
-      // 行番号抽出を試みる
       var lineMatch = errMsg.match(/line (\d+)/i) || errMsg.match(/:(\d+):/);
       var lineInfo = lineMatch ? ' (行: ' + lineMatch[1] + ')' : '';
       previewContainer.innerHTML = '<div class="error-msg">JS実行エラー' + lineInfo + '\n\n' + escapeHtml(errMsg) + '</div>';
