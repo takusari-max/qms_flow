@@ -28,18 +28,19 @@ Google Apps Script の `javascript.html` に貼り付けて使用します。
 
 ## GAS への貼り付け手順
 
-1. Google Apps Script プロジェクトを開く
+1. [script.google.com](https://script.google.com) でスタンドアロン型プロジェクトを作成
 2. `ファイル` > `新規作成` > `HTML` で `javascript` という名前のファイルを作成
 3. `javascript.html` の内容をすべてコピーして貼り付ける
-4. `Code.gs` から `HtmlService.createHtmlOutputFromFile('javascript')` で表示
+4. `Code.gs` に以下の `doGet()` 関数を記述
+5. `デプロイ` > `新しいデプロイ` > 種類: `ウェブアプリ` を選択してデプロイ
+6. 発行されたURLにアクセスしてエディタを使用
 
 ```javascript
-// Code.gs の例
-function showFlowEditor() {
-  var html = HtmlService.createHtmlOutputFromFile('javascript')
-    .setWidth(1200)
-    .setHeight(700);
-  SpreadsheetApp.getUi().showModalDialog(html, 'QMS フロー図エディタ');
+// Code.gs（ウェブアプリとしてデプロイ）
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('javascript')
+    .setTitle('QMS フロー図エディタ')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 ```
 
