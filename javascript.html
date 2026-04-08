@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QMS フロー図エディタ</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: #1e1e2e;
+    color: #cdd6f4;
+    overflow: hidden;
+  }
+
+  /* ===== ヘッダー / ツールバー ===== */
+  #toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: #181825;
+    border-bottom: 1px solid #313244;
+    flex-wrap: wrap;
+    min-height: 48px;
+  }
+
+  #toolbar .toolbar-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: #cba6f7;
+    margin-right: 12px;
+    white-space: nowrap;
+  }
+
+  #toolbar .separator {
+    width: 1px;
+    height: 24px;
+    background: #45475a;
+    margin: 0 4px;
+  }
+
+  #toolbar .group-label {
+    font-size: 10px;
+    color: #6c7086;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-right: 2px;
+  }
+
+  .btn {
+    padding: 5px 10px;
+    border: 1px solid #45475a;
+    border-radius: 6px;
+    background: #313244;
+    color: #cdd6f4;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover {
+    background: #45475a;
+    border-color: #585b70;
+  }
+  .btn:active {
+    background: #585b70;
+  }
+  .btn.accent {
+    background: #cba6f7;
+    color: #1e1e2e;
+    border-color: #cba6f7;
+  }
+  .btn.accent:hover {
+    background: #b4befe;
+    border-color: #b4befe;
+  }
+
+  /* ===== メインエリア ===== */
+  #main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* エディタペイン */
+  #editor-pane {
+    display: flex;
+    flex-direction: column;
+    width: 50%;
+    min-width: 200px;
+    background: #1e1e2e;
+  }
+
+  #editor-pane .pane-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
+    background: #181825;
+    border-bottom: 1px solid #313244;
+    font-size: 12px;
+    color: #a6adc8;
+  }
+
+  #svg-editor {
+    flex: 1;
+    width: 100%;
+    padding: 12px;
+    border: none;
+    outline: none;
+    resize: none;
+    background: #1e1e2e;
+    color: #cdd6f4;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    tab-size: 2;
+  }
+
+  /* ドラッグ用分割バー */
+  #divider {
+    width: 6px;
+    cursor: col-resize;
+    background: #313244;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+  #divider:hover, #divider.active {
+    background: #cba6f7;
+  }
+
+  /* プレビューペイン */
+  #preview-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 200px;
+    background: #ffffff;
+  }
+
+  #preview-pane .pane-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
+    background: #f5f5f5;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 12px;
+    color: #666;
+  }
+
+  #preview-container {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+  }
+
+  #preview-container svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  #preview-container .error-msg {
+    color: #e64553;
+    background: #fee;
+    border: 1px solid #e64553;
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-family: monospace;
+    white-space: pre-wrap;
+    max-width: 100%;
+  }
+
+  /* ===== フッター ===== */
+  #footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
+    background: #181825;
+    border-top: 1px solid #313244;
+    font-size: 11px;
+    color: #6c7086;
+  }
+
+  #footer .status-msg {
+    transition: color 0.3s;
+  }
+  #footer .status-msg.success {
+    color: #a6e3a1;
+  }
+
+  /* ===== トースト通知 ===== */
+  #toast {
+    position: fixed;
+    bottom: 48px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #313244;
+    color: #cdd6f4;
+    padding: 8px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s, transform 0.3s;
+    z-index: 1000;
+  }
+  #toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<!-- ツールバー -->
+<div id="toolbar">
+  <span class="toolbar-title">QMS フロー図エディタ</span>
+  <div class="separator"></div>
+
+  <span class="group-label">基本</span>
+  <button class="btn" onclick="insertShape('start')" title="開始/終了（角丸長方形）">開始/終了</button>
+  <button class="btn" onclick="insertShape('process')" title="プロセス（長方形）">プロセス</button>
+  <button class="btn" onclick="insertShape('decision')" title="判断（ひし形）">判断</button>
+  <button class="btn" onclick="insertShape('arrow')" title="矢印（接続線）">矢印</button>
+
+  <div class="separator"></div>
+  <span class="group-label">拡張</span>
+  <button class="btn" onclick="insertShape('document')" title="書類（波型下辺）">書類</button>
+  <button class="btn" onclick="insertShape('database')" title="データベース（円柱）">DB</button>
+  <button class="btn" onclick="insertShape('data')" title="データ/入出力（平行四辺形）">入出力</button>
+  <button class="btn" onclick="insertShape('manual')" title="手動操作（台形）">手動操作</button>
+  <button class="btn" onclick="insertShape('predefined')" title="定義済み処理（二重線長方形）">定義済処理</button>
+  <button class="btn" onclick="insertShape('swimlane')" title="スイムレーン（区画）">スイムレーン</button>
+
+  <div class="separator"></div>
+  <span class="group-label">操作</span>
+  <button class="btn" onclick="insertShape('text')" title="テキストラベル">テキスト</button>
+  <button class="btn" onclick="loadSample()" title="サンプルを読み込み">サンプル</button>
+  <button class="btn" onclick="clearEditor()" title="エディタをクリア">クリア</button>
+  <button class="btn accent" onclick="copySvg()" title="SVGコードをコピー">コピー</button>
+</div>
+
+<!-- メインエリア -->
+<div id="main">
+  <!-- エディタ -->
+  <div id="editor-pane">
+    <div class="pane-header">
+      <span>SVG コード</span>
+      <span id="line-info">行: 1 / 列: 1</span>
+    </div>
+    <textarea id="svg-editor" spellcheck="false" placeholder="ここにSVGコードを入力..."></textarea>
+  </div>
+
+  <!-- 分割バー -->
+  <div id="divider"></div>
+
+  <!-- プレビュー -->
+  <div id="preview-pane">
+    <div class="pane-header">
+      <span>プレビュー</span>
+      <span id="preview-status"></span>
+    </div>
+    <div id="preview-container"></div>
+  </div>
+</div>
+
+<!-- フッター -->
+<div id="footer">
+  <span id="status-msg">準備完了</span>
+  <span>QMS Flow Editor v1.0</span>
+</div>
+
+<!-- トースト通知 -->
+<div id="toast"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ===== 要素参照 =====
+  var editor = document.getElementById('svg-editor');
+  var previewContainer = document.getElementById('preview-container');
+  var divider = document.getElementById('divider');
+  var editorPane = document.getElementById('editor-pane');
+  var lineInfo = document.getElementById('line-info');
+  var previewStatus = document.getElementById('preview-status');
+  var statusMsg = document.getElementById('status-msg');
+  var toastEl = document.getElementById('toast');
+
+  // ===== 図形テンプレート =====
+  var shapes = {
+    start: [
+      '  <!-- 開始/終了 -->',
+      '  <rect x="100" y="50" width="120" height="50" rx="25" ry="25"',
+      '        fill="#a6e3a1" stroke="#40a02b" stroke-width="2"/>',
+      '  <text x="160" y="80" text-anchor="middle" font-size="14" fill="#1e1e2e">開始</text>'
+    ].join('\n'),
+
+    process: [
+      '  <!-- プロセス -->',
+      '  <rect x="100" y="150" width="120" height="60"',
+      '        fill="#89b4fa" stroke="#1e66f5" stroke-width="2" rx="4"/>',
+      '  <text x="160" y="185" text-anchor="middle" font-size="14" fill="#1e1e2e">処理名</text>'
+    ].join('\n'),
+
+    decision: [
+      '  <!-- 判断 -->',
+      '  <polygon points="160,250 230,290 160,330 90,290"',
+      '           fill="#f9e2af" stroke="#df8e1d" stroke-width="2"/>',
+      '  <text x="160" y="295" text-anchor="middle" font-size="13" fill="#1e1e2e">条件?</text>'
+    ].join('\n'),
+
+    arrow: [
+      '  <!-- 矢印 -->',
+      '  <defs>',
+      '    <marker id="arrowhead" markerWidth="10" markerHeight="7"',
+      '            refX="10" refY="3.5" orient="auto" fill="#585b70">',
+      '      <polygon points="0 0, 10 3.5, 0 7"/>',
+      '    </marker>',
+      '  </defs>',
+      '  <line x1="160" y1="100" x2="160" y2="150"',
+      '        stroke="#585b70" stroke-width="2" marker-end="url(#arrowhead)"/>'
+    ].join('\n'),
+
+    document: [
+      '  <!-- 書類 -->',
+      '  <path d="M100,150 L220,150 L220,210 Q190,195 160,210 Q130,225 100,210 Z"',
+      '        fill="#f5c2e7" stroke="#ea76cb" stroke-width="2"/>',
+      '  <text x="160" y="185" text-anchor="middle" font-size="13" fill="#1e1e2e">文書名</text>'
+    ].join('\n'),
+
+    database: [
+      '  <!-- データベース -->',
+      '  <path d="M100,170 L100,230 Q100,250 160,250 Q220,250 220,230 L220,170"',
+      '        fill="#89dceb" stroke="#04a5e5" stroke-width="2"/>',
+      '  <ellipse cx="160" cy="170" rx="60" ry="20"',
+      '           fill="#89dceb" stroke="#04a5e5" stroke-width="2"/>',
+      '  <text x="160" y="215" text-anchor="middle" font-size="13" fill="#1e1e2e">DB名</text>'
+    ].join('\n'),
+
+    data: [
+      '  <!-- データ/入出力 -->',
+      '  <polygon points="120,150 240,150 220,210 100,210"',
+      '           fill="#fab387" stroke="#fe640b" stroke-width="2"/>',
+      '  <text x="170" y="185" text-anchor="middle" font-size="13" fill="#1e1e2e">入出力</text>'
+    ].join('\n'),
+
+    manual: [
+      '  <!-- 手動操作 -->',
+      '  <polygon points="100,150 220,150 200,210 120,210"',
+      '           fill="#eba0ac" stroke="#d20f39" stroke-width="2"/>',
+      '  <text x="160" y="185" text-anchor="middle" font-size="13" fill="#1e1e2e">手動操作</text>'
+    ].join('\n'),
+
+    predefined: [
+      '  <!-- 定義済み処理 -->',
+      '  <rect x="100" y="150" width="120" height="60"',
+      '        fill="#b4befe" stroke="#7287fd" stroke-width="2" rx="4"/>',
+      '  <line x1="112" y1="150" x2="112" y2="210" stroke="#7287fd" stroke-width="1.5"/>',
+      '  <line x1="208" y1="150" x2="208" y2="210" stroke="#7287fd" stroke-width="1.5"/>',
+      '  <text x="160" y="185" text-anchor="middle" font-size="13" fill="#1e1e2e">処理名</text>'
+    ].join('\n'),
+
+    swimlane: [
+      '  <!-- スイムレーン -->',
+      '  <rect x="50" y="50" width="300" height="200"',
+      '        fill="none" stroke="#585b70" stroke-width="1.5" rx="4"/>',
+      '  <rect x="50" y="50" width="300" height="30"',
+      '        fill="#313244" stroke="#585b70" stroke-width="1.5" rx="4"/>',
+      '  <text x="200" y="70" text-anchor="middle" font-size="13" fill="#cdd6f4">担当部門名</text>'
+    ].join('\n'),
+
+    text: [
+      '  <!-- テキストラベル -->',
+      '  <text x="160" y="100" text-anchor="middle" font-size="14" fill="#4c4f69">テキスト</text>'
+    ].join('\n')
+  };
+
+  // ===== サンプルフロー図 =====
+  var sampleSvg = [
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 620">',
+    '  <!-- 矢印マーカー定義 -->',
+    '  <defs>',
+    '    <marker id="arrowhead" markerWidth="10" markerHeight="7"',
+    '            refX="10" refY="3.5" orient="auto" fill="#585b70">',
+    '      <polygon points="0 0, 10 3.5, 0 7"/>',
+    '    </marker>',
+    '  </defs>',
+    '',
+    '  <!-- 背景 -->',
+    '  <rect width="400" height="620" fill="#f8f9fa" rx="8"/>',
+    '  <text x="200" y="30" text-anchor="middle" font-size="16" font-weight="bold" fill="#1e1e2e">QMS 文書管理プロセス</text>',
+    '',
+    '  <!-- 開始 -->',
+    '  <rect x="140" y="50" width="120" height="45" rx="22" ry="22"',
+    '        fill="#a6e3a1" stroke="#40a02b" stroke-width="2"/>',
+    '  <text x="200" y="78" text-anchor="middle" font-size="14" fill="#1e1e2e">開始</text>',
+    '',
+    '  <!-- 矢印: 開始 → 文書作成 -->',
+    '  <line x1="200" y1="95" x2="200" y2="120"',
+    '        stroke="#585b70" stroke-width="2" marker-end="url(#arrowhead)"/>',
+    '',
+    '  <!-- プロセス: 文書作成 -->',
+    '  <rect x="130" y="120" width="140" height="55"',
+    '        fill="#89b4fa" stroke="#1e66f5" stroke-width="2" rx="4"/>',
+    '  <text x="200" y="152" text-anchor="middle" font-size="14" fill="#1e1e2e">文書作成</text>',
+    '',
+    '  <!-- 矢印: 文書作成 → レビュー -->',
+    '  <line x1="200" y1="175" x2="200" y2="200"',
+    '        stroke="#585b70" stroke-width="2" marker-end="url(#arrowhead)"/>',
+    '',
+    '  <!-- プロセス: レビュー -->',
+    '  <rect x="130" y="200" width="140" height="55"',
+    '        fill="#89b4fa" stroke="#1e66f5" stroke-width="2" rx="4"/>',
+    '  <text x="200" y="232" text-anchor="middle" font-size="14" fill="#1e1e2e">レビュー実施</text>',
+    '',
+    '  <!-- 矢印: レビュー → 判断 -->',
+    '  <line x1="200" y1="255" x2="200" y2="280"',
+    '        stroke="#585b70" stroke-width="2" marker-end="url(#arrowhead)"/>',
+    '',
+    '  <!-- 判断: 承認? -->',
+    '  <polygon points="200,280 270,320 200,360 130,320"',
+    '           fill="#f9e2af" stroke="#df8e1d" stroke-width="2"/>',
+    '  <text x="200" y="325" text-anchor="middle" font-size="13" fill="#1e1e2e">承認?</text>',
+    '',
+    '  <!-- 矢印: 承認No → 文書修正 (左) -->',
+    '  <line x1="130" y1="320" x2="60" y2="320"',
+    '        stroke="#e64553" stroke-width="2" marker-end="url(#arrowhead)"/>',
+    '  <text x="95" y="312" text-anchor="middle" font-size="11" fill="#e64553">No</text>',
+    '',
+    '  <!-- プロセス: 文書修正 -->',
+    '  <rect x="10" y="340" width="100" height="50"',
+    '        fill="#eba0ac" stroke="#d20f39" stroke-width="2" rx="4"/>',
+    '  <text x="60" y="370" text-anchor="middle" font-size="13" fill="#1e1e2e">文書修正</text>',
+    '',
+    '  <!-- 矢印: 文書修正 → レビュー (上に戻る) -->',
+    '  <polyline points="60,340 60,227 130,227"',
+    '            fill="none" stroke="#585b70" stroke-width="2" marker-end="url(#arrowhead)"/>',
+    '',
+    '  <!-- 矢印: 承認Yes → 登録 (下) -->',
+    '  <line x1="200" y1="360" x2="200" y2="390"',
+    '        stroke="#40a02b" stroke-width="2" marker-end="url(#arrowhead)"/>',
+    '  <text x="215" y="380" font-size="11" fill="#40a02b">Yes</text>',
+    '',
+    '  <!-- 書類: 文書登録 -->',
+    '  <path d="M130,390 L270,390 L270,440 Q240,428 200,440 Q160,452 130,440 Z"',
+    '        fill="#f5c2e7" stroke="#ea76cb" stroke-width="2"/>',
+    '  <text x="200" y="420" text-anchor="middle" font-size="13" fill="#1e1e2e">文書登録</text>',
+    '',
+    '  <!-- 矢印: 登録 → DB -->',
+    '  <line x1="200" y1="445" x2="200" y2="470"',
+    '        stroke="#585b70" stroke-width="2" marker-end="url(#arrowhead)"/>',
+    '',
+    '  <!-- データベース: 文書DB -->',
+    '  <path d="M140,490 L140,530 Q140,550 200,550 Q260,550 260,530 L260,490"',
+    '        fill="#89dceb" stroke="#04a5e5" stroke-width="2"/>',
+    '  <ellipse cx="200" cy="490" rx="60" ry="18"',
+    '           fill="#89dceb" stroke="#04a5e5" stroke-width="2"/>',
+    '  <text x="200" y="525" text-anchor="middle" font-size="13" fill="#1e1e2e">文書DB</text>',
+    '',
+    '  <!-- 矢印: DB → 終了 -->',
+    '  <line x1="200" y1="550" x2="200" y2="570"',
+    '        stroke="#585b70" stroke-width="2" marker-end="url(#arrowhead)"/>',
+    '',
+    '  <!-- 終了 -->',
+    '  <rect x="140" y="570" width="120" height="40" rx="20" ry="20"',
+    '        fill="#a6e3a1" stroke="#40a02b" stroke-width="2"/>',
+    '  <text x="200" y="595" text-anchor="middle" font-size="14" fill="#1e1e2e">終了</text>',
+    '</svg>'
+  ].join('\n');
+
+  // ===== リアルタイムプレビュー =====
+  var debounceTimer = null;
+
+  function updatePreview() {
+    var code = editor.value.trim();
+    if (!code) {
+      previewContainer.innerHTML = '<div style="color:#999;font-size:14px;text-align:center;margin-top:40px;">SVGコードを入力するとプレビューが表示されます</div>';
+      previewStatus.textContent = '';
+      return;
+    }
+
+    try {
+      var parser = new DOMParser();
+      var doc = parser.parseFromString(code, 'image/svg+xml');
+      var errorNode = doc.querySelector('parsererror');
+      if (errorNode) {
+        var errorText = errorNode.textContent || 'SVG パースエラー';
+        previewContainer.innerHTML = '<div class="error-msg">' + escapeHtml(errorText) + '</div>';
+        previewStatus.textContent = 'エラー';
+        previewStatus.style.color = '#e64553';
+      } else {
+        previewContainer.innerHTML = '';
+        var svgNode = doc.documentElement;
+        document.adoptNode(svgNode);
+        previewContainer.appendChild(svgNode);
+        previewStatus.textContent = '正常';
+        previewStatus.style.color = '#40a02b';
+      }
+    } catch (e) {
+      previewContainer.innerHTML = '<div class="error-msg">' + escapeHtml(e.message) + '</div>';
+      previewStatus.textContent = 'エラー';
+      previewStatus.style.color = '#e64553';
+    }
+  }
+
+  function debouncedPreview() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(updatePreview, 300);
+  }
+
+  editor.addEventListener('input', debouncedPreview);
+
+  // ===== カーソル位置表示 =====
+  function updateLineInfo() {
+    var val = editor.value;
+    var pos = editor.selectionStart;
+    var lines = val.substring(0, pos).split('\n');
+    var line = lines.length;
+    var col = lines[lines.length - 1].length + 1;
+    lineInfo.textContent = '行: ' + line + ' / 列: ' + col;
+  }
+
+  editor.addEventListener('keyup', updateLineInfo);
+  editor.addEventListener('click', updateLineInfo);
+
+  // ===== Tab キーでインデント =====
+  editor.addEventListener('keydown', function(e) {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      var start = this.selectionStart;
+      var end = this.selectionEnd;
+      var val = this.value;
+      this.value = val.substring(0, start) + '  ' + val.substring(end);
+      this.selectionStart = this.selectionEnd = start + 2;
+      debouncedPreview();
+    }
+  });
+
+  // ===== 図形テンプレート挿入 =====
+  window.insertShape = function(type) {
+    var snippet = shapes[type];
+    if (!snippet) return;
+
+    var val = editor.value;
+    var pos = editor.selectionStart;
+
+    // SVGタグの閉じタグ前に挿入、なければ末尾に追加
+    var insertPos = pos;
+    var prefix = '\n';
+    var suffix = '\n';
+
+    // もしエディタが空の場合、SVGラッパーごと挿入
+    if (!val.trim()) {
+      editor.value = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">\n' +
+        '  <defs>\n' +
+        '    <marker id="arrowhead" markerWidth="10" markerHeight="7"\n' +
+        '            refX="10" refY="3.5" orient="auto" fill="#585b70">\n' +
+        '      <polygon points="0 0, 10 3.5, 0 7"/>\n' +
+        '    </marker>\n' +
+        '  </defs>\n\n' +
+        snippet + '\n' +
+        '</svg>';
+    } else {
+      // カーソル位置に挿入
+      editor.value = val.substring(0, insertPos) + prefix + snippet + suffix + val.substring(insertPos);
+      editor.selectionStart = editor.selectionEnd = insertPos + prefix.length + snippet.length;
+    }
+
+    editor.focus();
+    debouncedPreview();
+    showToast(type + ' を挿入しました');
+  };
+
+  // ===== サンプル読み込み =====
+  window.loadSample = function() {
+    editor.value = sampleSvg;
+    editor.scrollTop = 0;
+    updatePreview();
+    showToast('サンプルフロー図を読み込みました');
+    setStatus('サンプル読み込み完了');
+  };
+
+  // ===== クリア =====
+  window.clearEditor = function() {
+    editor.value = '';
+    previewContainer.innerHTML = '';
+    previewStatus.textContent = '';
+    editor.focus();
+    setStatus('エディタをクリアしました');
+  };
+
+  // ===== SVGコピー =====
+  window.copySvg = function() {
+    var code = editor.value;
+    if (!code.trim()) {
+      showToast('コピーするコードがありません');
+      return;
+    }
+
+    // navigator.clipboard が使えない場合のフォールバック
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(function() {
+        showToast('SVGコードをコピーしました');
+        setStatus('コピー完了');
+      }).catch(function() {
+        fallbackCopy(code);
+      });
+    } else {
+      fallbackCopy(code);
+    }
+  };
+
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      showToast('SVGコードをコピーしました');
+      setStatus('コピー完了');
+    } catch (e) {
+      showToast('コピーに失敗しました');
+    }
+    document.body.removeChild(ta);
+  }
+
+  // ===== 分割バーのドラッグ =====
+  var isDragging = false;
+
+  divider.addEventListener('mousedown', function(e) {
+    isDragging = true;
+    divider.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!isDragging) return;
+    var mainRect = document.getElementById('main').getBoundingClientRect();
+    var newWidth = e.clientX - mainRect.left;
+    var minW = 200;
+    var maxW = mainRect.width - 200 - 6;
+    newWidth = Math.max(minW, Math.min(maxW, newWidth));
+    editorPane.style.width = newWidth + 'px';
+  });
+
+  document.addEventListener('mouseup', function() {
+    if (isDragging) {
+      isDragging = false;
+      divider.classList.remove('active');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+  });
+
+  // ===== ユーティリティ =====
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  }
+
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    setTimeout(function() {
+      toastEl.classList.remove('show');
+    }, 2000);
+  }
+
+  function setStatus(msg) {
+    statusMsg.textContent = msg;
+    statusMsg.classList.add('success');
+    setTimeout(function() {
+      statusMsg.classList.remove('success');
+      statusMsg.textContent = '準備完了';
+    }, 3000);
+  }
+
+  // ===== 初期化: サンプルを読み込み =====
+  loadSample();
+
+})();
+</script>
+</body>
+</html>

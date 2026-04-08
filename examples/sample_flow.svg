@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 620">
+  <!-- 矢印マーカー定義 -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7"
+            refX="10" refY="3.5" orient="auto" fill="#585b70">
+      <polygon points="0 0, 10 3.5, 0 7"/>
+    </marker>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="400" height="620" fill="#f8f9fa" rx="8"/>
+  <text x="200" y="30" text-anchor="middle" font-size="16" font-weight="bold" fill="#1e1e2e">QMS 文書管理プロセス</text>
+
+  <!-- 開始 -->
+  <rect x="140" y="50" width="120" height="45" rx="22" ry="22"
+        fill="#a6e3a1" stroke="#40a02b" stroke-width="2"/>
+  <text x="200" y="78" text-anchor="middle" font-size="14" fill="#1e1e2e">開始</text>
+
+  <!-- 矢印: 開始 → 文書作成 -->
+  <line x1="200" y1="95" x2="200" y2="120"
+        stroke="#585b70" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+  <!-- プロセス: 文書作成 -->
+  <rect x="130" y="120" width="140" height="55"
+        fill="#89b4fa" stroke="#1e66f5" stroke-width="2" rx="4"/>
+  <text x="200" y="152" text-anchor="middle" font-size="14" fill="#1e1e2e">文書作成</text>
+
+  <!-- 矢印: 文書作成 → レビュー -->
+  <line x1="200" y1="175" x2="200" y2="200"
+        stroke="#585b70" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+  <!-- プロセス: レビュー -->
+  <rect x="130" y="200" width="140" height="55"
+        fill="#89b4fa" stroke="#1e66f5" stroke-width="2" rx="4"/>
+  <text x="200" y="232" text-anchor="middle" font-size="14" fill="#1e1e2e">レビュー実施</text>
+
+  <!-- 矢印: レビュー → 判断 -->
+  <line x1="200" y1="255" x2="200" y2="280"
+        stroke="#585b70" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+  <!-- 判断: 承認? -->
+  <polygon points="200,280 270,320 200,360 130,320"
+           fill="#f9e2af" stroke="#df8e1d" stroke-width="2"/>
+  <text x="200" y="325" text-anchor="middle" font-size="13" fill="#1e1e2e">承認?</text>
+
+  <!-- 矢印: 承認No → 文書修正 (左) -->
+  <line x1="130" y1="320" x2="60" y2="320"
+        stroke="#e64553" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="95" y="312" text-anchor="middle" font-size="11" fill="#e64553">No</text>
+
+  <!-- プロセス: 文書修正 -->
+  <rect x="10" y="340" width="100" height="50"
+        fill="#eba0ac" stroke="#d20f39" stroke-width="2" rx="4"/>
+  <text x="60" y="370" text-anchor="middle" font-size="13" fill="#1e1e2e">文書修正</text>
+
+  <!-- 矢印: 文書修正 → レビュー (上に戻る) -->
+  <polyline points="60,340 60,227 130,227"
+            fill="none" stroke="#585b70" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+  <!-- 矢印: 承認Yes → 登録 (下) -->
+  <line x1="200" y1="360" x2="200" y2="390"
+        stroke="#40a02b" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <text x="215" y="380" font-size="11" fill="#40a02b">Yes</text>
+
+  <!-- 書類: 文書登録 -->
+  <path d="M130,390 L270,390 L270,440 Q240,428 200,440 Q160,452 130,440 Z"
+        fill="#f5c2e7" stroke="#ea76cb" stroke-width="2"/>
+  <text x="200" y="420" text-anchor="middle" font-size="13" fill="#1e1e2e">文書登録</text>
+
+  <!-- 矢印: 登録 → DB -->
+  <line x1="200" y1="445" x2="200" y2="470"
+        stroke="#585b70" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+  <!-- データベース: 文書DB -->
+  <path d="M140,490 L140,530 Q140,550 200,550 Q260,550 260,530 L260,490"
+        fill="#89dceb" stroke="#04a5e5" stroke-width="2"/>
+  <ellipse cx="200" cy="490" rx="60" ry="18"
+           fill="#89dceb" stroke="#04a5e5" stroke-width="2"/>
+  <text x="200" y="525" text-anchor="middle" font-size="13" fill="#1e1e2e">文書DB</text>
+
+  <!-- 矢印: DB → 終了 -->
+  <line x1="200" y1="550" x2="200" y2="570"
+        stroke="#585b70" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+  <!-- 終了 -->
+  <rect x="140" y="570" width="120" height="40" rx="20" ry="20"
+        fill="#a6e3a1" stroke="#40a02b" stroke-width="2"/>
+  <text x="200" y="595" text-anchor="middle" font-size="14" fill="#1e1e2e">終了</text>
+</svg>
