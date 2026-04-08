@@ -220,6 +220,18 @@
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
+
+  /* ===== プレビュークリック → コードジャンプ ===== */
+  #preview-container svg *:not(defs *) { cursor: pointer; }
+
+  .svg-click-highlight {
+    pointer-events: none;
+    animation: clickHighlightFade 1.5s ease-out forwards;
+  }
+  @keyframes clickHighlightFade {
+    0%, 70% { stroke-opacity: 1; }
+    100% { stroke-opacity: 0; }
+  }
 </style>
 </head>
 <body>
@@ -789,6 +801,198 @@
       statusMsg.textContent = '準備完了';
     }, 3000);
   }
+
+  // ===== プレビュークリック → コードジャンプ =====
+
+  // クリック対象の解析: 意味のあるSVG要素を特定
+  function resolveClickTarget(element) {
+    var el = element;
+    // 無視する要素
+    while (el && el !== previewContainer) {
+      var tag = el.tagName ? el.tagName.toLowerCase() : '';
+      if (tag === 'svg' && el.parentNode === previewContainer) return null; // SVGルート背景
+      if (tag === 'defs' || tag === 'marker') return null;
+      if (['rect', 'text', 'line', 'polygon', 'polyline', 'path', 'ellipse', 'circle'].indexOf(tag) >= 0) {
+        break;
+      }
+      el = el.parentNode;
+    }
+    if (!el || el === previewContainer) return null;
+
+    var tag = el.tagName.toLowerCase();
+    var descriptor = { tagName: tag, text: '', attrs: {}, element: el };
+
+    // テキスト内容を取得（自身 or 兄弟テキスト）
+    if (tag === 'text') {
+      descriptor.text = (el.textContent || '').trim();
+    } else if (el.parentNode) {
+      var siblings = el.parentNode.children;
+      for (var i = 0; i < siblings.length; i++) {
+        if (siblings[i].tagName && siblings[i].tagName.toLowerCase() === 'text') {
+          descriptor.text = (siblings[i].textContent || '').trim();
+          break;
+        }
+      }
+    }
+
+    // 座標属性を収集
+    var attrNames = ['x', 'y', 'x1', 'y1', 'x2', 'y2', 'width', 'height', 'cx', 'cy', 'rx', 'ry', 'points', 'd'];
+    for (var a = 0; a < attrNames.length; a++) {
+      var v = el.getAttribute(attrNames[a]);
+      if (v) descriptor.attrs[attrNames[a]] = v;
+    }
+
+    return descriptor;
+  }
+
+  // 検索パターン生成
+  function buildSearchPatterns(descriptor) {
+    var patterns = [];
+    var code = editor.value;
+    var isJsMode = !code.trim().match(/^\s*</);
+
+    if (isJsMode) {
+      // JSモード: 文字列リテラル内のテキスト検索
+      if (descriptor.text) {
+        patterns.push("'" + descriptor.text + "'");
+        patterns.push('"' + descriptor.text + '"');
+      }
+      // 座標ペア検索
+      if (descriptor.attrs.x && descriptor.attrs.y) {
+        patterns.push(descriptor.attrs.x + ',' + descriptor.attrs.y);
+      }
+      if (descriptor.attrs.x1 && descriptor.attrs.y1) {
+        patterns.push(descriptor.attrs.x1 + ',' + descriptor.attrs.y1 + ',' + descriptor.attrs.x2 + ',' + descriptor.attrs.y2);
+      }
+      if (descriptor.attrs.cx && descriptor.attrs.cy) {
+        patterns.push(descriptor.attrs.cx + ',' + descriptor.attrs.cy);
+      }
+      if (descriptor.attrs.points) {
+        // points属性の最初の座標ペアで検索
+        var firstCoord = descriptor.attrs.points.trim().split(/\s+/)[0];
+        if (firstCoord) patterns.push(firstCoord);
+      }
+    } else {
+      // SVG/HTMLモード
+      if (descriptor.text) {
+        patterns.push('>' + descriptor.text + '<');
+      }
+      if (descriptor.attrs.x && descriptor.attrs.y) {
+        patterns.push('x="' + descriptor.attrs.x + '"');
+      }
+      if (descriptor.attrs.x1) {
+        patterns.push('x1="' + descriptor.attrs.x1 + '"');
+      }
+      if (descriptor.attrs.points) {
+        patterns.push('points="' + descriptor.attrs.points);
+      }
+      if (descriptor.attrs.d) {
+        // pathのd属性の先頭部分で検索
+        var dShort = descriptor.attrs.d.substring(0, 20);
+        patterns.push(dShort);
+      }
+    }
+
+    return patterns;
+  }
+
+  // コード内検索
+  function findInCode(patterns) {
+    var code = editor.value;
+    for (var i = 0; i < patterns.length; i++) {
+      var idx = code.indexOf(patterns[i]);
+      if (idx >= 0) {
+        return { charIndex: idx, matchLength: patterns[i].length };
+      }
+    }
+    return null;
+  }
+
+  // エディタの該当位置へジャンプ
+  function navigateEditorToChar(charIndex, matchLength) {
+    var code = editor.value;
+    // 行の先頭と末尾を算出
+    var lineStart = code.lastIndexOf('\n', charIndex - 1) + 1;
+    var lineEnd = code.indexOf('\n', charIndex);
+    if (lineEnd < 0) lineEnd = code.length;
+
+    // 行番号算出
+    var lineNum = code.substring(0, charIndex).split('\n').length;
+
+    // 行全体を選択してハイライト
+    editor.focus();
+    editor.setSelectionRange(lineStart, lineEnd);
+
+    // スクロール位置の調整（選択範囲が見えるように）
+    var totalLines = code.split('\n').length;
+    var lineHeight = editor.scrollHeight / totalLines;
+    var targetScroll = (lineNum - 5) * lineHeight;
+    if (targetScroll < 0) targetScroll = 0;
+    editor.scrollTop = targetScroll;
+
+    updateLineInfo();
+    return lineNum;
+  }
+
+  // SVG要素にハイライト枠を表示
+  function highlightSvgElement(element) {
+    try {
+      var svgRoot = element.closest ? element.closest('svg') : null;
+      if (!svgRoot) {
+        var p = element;
+        while (p && p.tagName && p.tagName.toLowerCase() !== 'svg') p = p.parentNode;
+        svgRoot = p;
+      }
+      if (!svgRoot || !svgRoot.tagName || svgRoot.tagName.toLowerCase() !== 'svg') return;
+
+      var bbox = element.getBBox();
+      var pad = 4;
+      var ns = 'http://www.w3.org/2000/svg';
+      var rect = document.createElementNS(ns, 'rect');
+      rect.setAttribute('x', bbox.x - pad);
+      rect.setAttribute('y', bbox.y - pad);
+      rect.setAttribute('width', bbox.width + pad * 2);
+      rect.setAttribute('height', bbox.height + pad * 2);
+      rect.setAttribute('fill', 'none');
+      rect.setAttribute('stroke', '#cba6f7');
+      rect.setAttribute('stroke-width', '2.5');
+      rect.setAttribute('stroke-dasharray', '6,3');
+      rect.setAttribute('rx', '4');
+      rect.classList.add('svg-click-highlight');
+      svgRoot.appendChild(rect);
+
+      setTimeout(function() {
+        if (rect.parentNode) rect.parentNode.removeChild(rect);
+      }, 1500);
+    } catch (e) { /* ignore */ }
+  }
+
+  // メインクリックハンドラ
+  function handlePreviewClick(e) {
+    var target = e.target;
+    if (!target || target === previewContainer) return;
+
+    var descriptor = resolveClickTarget(target);
+    if (!descriptor) return;
+
+    var patterns = buildSearchPatterns(descriptor);
+    if (patterns.length === 0) {
+      showToast('対応するコードが見つかりません');
+      return;
+    }
+
+    var match = findInCode(patterns);
+    if (match) {
+      var lineNum = navigateEditorToChar(match.charIndex, match.matchLength);
+      highlightSvgElement(descriptor.element);
+      setStatus('行 ' + lineNum + ' にジャンプしました');
+    } else {
+      showToast('対応するコードが見つかりません');
+    }
+  }
+
+  // イベント委譲で登録
+  previewContainer.addEventListener('click', handlePreviewClick);
 
   // ===== 初期化: サンプルを読み込み =====
   loadSample();
