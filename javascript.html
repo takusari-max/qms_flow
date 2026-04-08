@@ -220,6 +220,134 @@
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
+
+  /* ===== モーダル ===== */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+  }
+  .modal-overlay.open {
+    display: flex;
+  }
+  .modal {
+    background: #1e1e2e;
+    border: 1px solid #45475a;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 800px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid #313244;
+  }
+  .modal-header h3 {
+    font-size: 15px;
+    color: #cba6f7;
+    font-weight: 600;
+  }
+  .modal-close {
+    background: none;
+    border: none;
+    color: #6c7086;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+  }
+  .modal-close:hover { color: #cdd6f4; }
+  .modal-body {
+    padding: 16px 20px;
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .modal-body label {
+    font-size: 12px;
+    color: #a6adc8;
+  }
+  .modal-body textarea {
+    width: 100%;
+    height: 200px;
+    padding: 10px;
+    border: 1px solid #45475a;
+    border-radius: 6px;
+    background: #11111b;
+    color: #cdd6f4;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    resize: vertical;
+  }
+  .modal-body textarea:focus {
+    outline: none;
+    border-color: #cba6f7;
+  }
+  .modal-body .svg-count {
+    font-size: 12px;
+    color: #6c7086;
+    min-height: 18px;
+  }
+  .modal-body .svg-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 150px;
+    overflow-y: auto;
+  }
+  .modal-body .svg-list-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #313244;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 13px;
+  }
+  .modal-body .svg-list-item:hover {
+    background: #45475a;
+  }
+  .modal-body .svg-list-item .index {
+    color: #cba6f7;
+    font-weight: 700;
+    min-width: 24px;
+  }
+  .modal-body .svg-list-item .info {
+    color: #a6adc8;
+    flex: 1;
+  }
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 20px;
+    border-top: 1px solid #313244;
+  }
+
+  .btn.green {
+    background: #a6e3a1;
+    color: #1e1e2e;
+    border-color: #a6e3a1;
+  }
+  .btn.green:hover {
+    background: #94e2d5;
+    border-color: #94e2d5;
+  }
 </style>
 </head>
 <body>
@@ -247,6 +375,8 @@
   <div class="separator"></div>
   <span class="group-label">操作</span>
   <button class="btn" onclick="insertShape('text')" title="テキストラベル">テキスト</button>
+  <button class="btn green" onclick="openImportModal()" title="HTMLを貼り付けてSVGを抽出">HTML読込</button>
+  <button class="btn green" onclick="exportHtml()" title="編集したSVGを元HTMLに再埋め込み">HTML出力</button>
   <button class="btn" onclick="loadSample()" title="サンプルを読み込み">サンプル</button>
   <button class="btn" onclick="clearEditor()" title="エディタをクリア">クリア</button>
   <button class="btn accent" onclick="copySvg()" title="SVGコードをコピー">コピー</button>
@@ -284,6 +414,44 @@
 
 <!-- トースト通知 -->
 <div id="toast"></div>
+
+<!-- HTML読込モーダル -->
+<div class="modal-overlay" id="import-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>HTML読込 - SVG抽出</h3>
+      <button class="modal-close" onclick="closeImportModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <label>既存のHTMLコードを貼り付けてください：</label>
+      <textarea id="import-html-input" placeholder="<html>&#10;  ...&#10;  <svg>...</svg>&#10;  ...&#10;</html>"></textarea>
+      <button class="btn accent" onclick="extractSvgFromHtml()" style="align-self:flex-start;">SVGを抽出</button>
+      <div class="svg-count" id="svg-count"></div>
+      <div class="svg-list" id="svg-list"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeImportModal()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- HTML出力モーダル -->
+<div class="modal-overlay" id="export-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>HTML出力 - SVG再埋め込み</h3>
+      <button class="modal-close" onclick="closeExportModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <label>編集したSVGが元のHTMLに埋め込まれた結果：</label>
+      <textarea id="export-html-output" readonly></textarea>
+      <button class="btn accent" onclick="copyExportHtml()" style="align-self:flex-start;">HTMLをコピー</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeExportModal()">閉じる</button>
+    </div>
+  </div>
+</div>
 
 <script>
 (function() {
@@ -693,6 +861,184 @@
       statusMsg.textContent = '準備完了';
     }, 3000);
   }
+
+  // ===== HTML読込・SVG抽出 =====
+  var originalHtml = '';
+  var extractedSvgs = [];
+  var selectedSvgIndex = -1;
+
+  window.openImportModal = function() {
+    document.getElementById('import-modal').classList.add('open');
+    document.getElementById('import-html-input').value = '';
+    document.getElementById('svg-count').textContent = '';
+    document.getElementById('svg-list').innerHTML = '';
+    extractedSvgs = [];
+    selectedSvgIndex = -1;
+    document.getElementById('import-html-input').focus();
+  };
+
+  window.closeImportModal = function() {
+    document.getElementById('import-modal').classList.remove('open');
+  };
+
+  window.extractSvgFromHtml = function() {
+    var htmlInput = document.getElementById('import-html-input').value.trim();
+    if (!htmlInput) {
+      showToast('HTMLコードを貼り付けてください');
+      return;
+    }
+
+    originalHtml = htmlInput;
+    extractedSvgs = [];
+
+    // DOMParserでHTMLをパースしてSVG要素を抽出
+    var parser = new DOMParser();
+    var doc = parser.parseFromString(htmlInput, 'text/html');
+    var svgElements = doc.querySelectorAll('svg');
+
+    if (svgElements.length === 0) {
+      // 正規表現でフォールバック抽出
+      var regex = /<svg[\s\S]*?<\/svg>/gi;
+      var matches = htmlInput.match(regex);
+      if (matches && matches.length > 0) {
+        extractedSvgs = matches;
+      }
+    } else {
+      for (var i = 0; i < svgElements.length; i++) {
+        var svgEl = svgElements[i];
+        // xmlns属性がない場合に追加
+        if (!svgEl.getAttribute('xmlns')) {
+          svgEl.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        }
+        // XMLSerializerでSVG文字列を生成
+        var serializer = new XMLSerializer();
+        var svgStr = serializer.serializeToString(svgEl);
+        extractedSvgs.push(formatSvgString(svgStr));
+      }
+    }
+
+    var countEl = document.getElementById('svg-count');
+    var listEl = document.getElementById('svg-list');
+    listEl.innerHTML = '';
+
+    if (extractedSvgs.length === 0) {
+      countEl.textContent = 'SVG要素が見つかりませんでした';
+      countEl.style.color = '#e64553';
+      return;
+    }
+
+    countEl.textContent = extractedSvgs.length + ' 個のSVGが見つかりました。クリックでエディタに読み込みます：';
+    countEl.style.color = '#a6e3a1';
+
+    for (var j = 0; j < extractedSvgs.length; j++) {
+      var item = document.createElement('div');
+      item.className = 'svg-list-item';
+      item.setAttribute('data-index', j);
+
+      // SVGの概要情報を取得
+      var svgCode = extractedSvgs[j];
+      var viewBoxMatch = svgCode.match(/viewBox="([^"]*)"/);
+      var widthMatch = svgCode.match(/width="([^"]*)"/);
+      var heightMatch = svgCode.match(/height="([^"]*)"/);
+      var info = '';
+      if (viewBoxMatch) info += 'viewBox: ' + viewBoxMatch[1];
+      else if (widthMatch && heightMatch) info += widthMatch[1] + ' x ' + heightMatch[1];
+      info += ' (' + svgCode.length + '文字)';
+
+      item.innerHTML = '<span class="index">#' + (j + 1) + '</span><span class="info">' + escapeHtml(info) + '</span>';
+      item.addEventListener('click', (function(idx) {
+        return function() { loadExtractedSvg(idx); };
+      })(j));
+      listEl.appendChild(item);
+    }
+
+    // SVGが1つだけならそのまま読み込み
+    if (extractedSvgs.length === 1) {
+      loadExtractedSvg(0);
+    }
+  };
+
+  function loadExtractedSvg(index) {
+    selectedSvgIndex = index;
+    editor.value = extractedSvgs[index];
+    editor.scrollTop = 0;
+    updatePreview();
+    closeImportModal();
+    showToast('SVG #' + (index + 1) + ' をエディタに読み込みました');
+    setStatus('HTML読込完了 (SVG #' + (index + 1) + ')');
+  }
+
+  function formatSvgString(svgStr) {
+    // 簡易的な整形: > の後に改行を入れて読みやすくする
+    var formatted = svgStr
+      .replace(/>\s*</g, '>\n<')
+      .replace(/(<svg[^>]*>)/g, '$1\n')
+      .replace(/(<\/svg>)/g, '\n$1');
+    // インデント付与
+    var lines = formatted.split('\n');
+    var indent = 0;
+    var result = [];
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (!line) continue;
+      if (line.match(/^<\//) && indent > 0) indent--;
+      result.push('  '.repeat(indent) + line);
+      if (line.match(/^<[^\/!?][^>]*[^\/]>$/) && !line.match(/^<(line|rect|circle|ellipse|polygon|polyline|path|text|image|use|marker|stop)\b/i)) {
+        indent++;
+      }
+    }
+    return result.join('\n');
+  }
+
+  // ===== HTML出力（SVG再埋め込み） =====
+  window.exportHtml = function() {
+    if (!originalHtml) {
+      showToast('先に「HTML読込」でHTMLを読み込んでください');
+      return;
+    }
+
+    var currentSvg = editor.value.trim();
+    if (!currentSvg) {
+      showToast('エディタにSVGコードがありません');
+      return;
+    }
+
+    var outputHtml = originalHtml;
+
+    if (selectedSvgIndex >= 0) {
+      // 正規表現でN番目のSVGを置換
+      var svgRegex = /<svg[\s\S]*?<\/svg>/gi;
+      var count = 0;
+      outputHtml = originalHtml.replace(svgRegex, function(match) {
+        if (count === selectedSvgIndex) {
+          count++;
+          return currentSvg;
+        }
+        count++;
+        return match;
+      });
+    }
+
+    document.getElementById('export-html-output').value = outputHtml;
+    document.getElementById('export-modal').classList.add('open');
+  };
+
+  window.closeExportModal = function() {
+    document.getElementById('export-modal').classList.remove('open');
+  };
+
+  window.copyExportHtml = function() {
+    var code = document.getElementById('export-html-output').value;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(function() {
+        showToast('HTMLをコピーしました');
+      }).catch(function() {
+        fallbackCopy(code);
+      });
+    } else {
+      fallbackCopy(code);
+    }
+  };
 
   // ===== 初期化: サンプルを読み込み =====
   loadSample();
