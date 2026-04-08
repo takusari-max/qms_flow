@@ -234,9 +234,9 @@
   }
 
   /* ===== 座標グリッド ===== */
-  .coord-grid line { stroke: #ccc; stroke-width: 0.5; }
-  .coord-grid line.major { stroke: #aaa; stroke-width: 1; }
-  .coord-grid text { fill: #999; font-size: 9px; font-family: monospace; pointer-events: none; }
+  .coord-grid line { stroke: #aaa; stroke-width: 0.5; stroke-dasharray: 4,4; }
+  .coord-grid line.major { stroke: #888; stroke-width: 1; stroke-dasharray: none; }
+  .coord-grid text { fill: #666; font-size: 9px; font-family: monospace; pointer-events: none; }
   #btn-grid.active { background: #cba6f7; color: #1e1e2e; border-color: #cba6f7; }
 
   /* ===== クリックヘルパー（線のヒットエリア拡大） ===== */
@@ -850,12 +850,12 @@
     }
     if (!w || !h) return;
 
-    // グリッド間隔を自動決定
-    var maxDim = Math.max(w, h);
-    var step = maxDim > 800 ? 100 : maxDim > 300 ? 50 : 25;
+    // グリッド間隔: 100刻み固定
+    var step = 100;
 
     var g = document.createElementNS(ns, 'g');
     g.setAttribute('class', 'coord-grid');
+    g.setAttribute('pointer-events', 'none');
 
     // 縦線 + Xラベル
     var startX = Math.ceil(minX / step) * step;
@@ -865,7 +865,7 @@
       line.setAttribute('y1', minY);
       line.setAttribute('x2', x);
       line.setAttribute('y2', minY + h);
-      if (x % (step * 2) === 0) line.setAttribute('class', 'major');
+      if (x % 500 === 0) line.setAttribute('class', 'major');
       g.appendChild(line);
 
       var label = document.createElementNS(ns, 'text');
@@ -883,7 +883,7 @@
       hLine.setAttribute('y1', y);
       hLine.setAttribute('x2', minX + w);
       hLine.setAttribute('y2', y);
-      if (y % (step * 2) === 0) hLine.setAttribute('class', 'major');
+      if (y % 500 === 0) hLine.setAttribute('class', 'major');
       g.appendChild(hLine);
 
       var hLabel = document.createElementNS(ns, 'text');
@@ -893,12 +893,8 @@
       g.appendChild(hLabel);
     }
 
-    // 最初の子要素として挿入（背景側）
-    if (svgEl.firstChild) {
-      svgEl.insertBefore(g, svgEl.firstChild);
-    } else {
-      svgEl.appendChild(g);
-    }
+    // 最後の子要素として挿入（最前面に表示）
+    svgEl.appendChild(g);
   }
 
   // ===== クリックヘルパー（線のヒットエリア拡大） =====
